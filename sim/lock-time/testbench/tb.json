@@ -1,0 +1,226 @@
+{
+  "name": "lock-time",
+  "description": "closed-loop lock acquisition (#12): N in {4,16,64} x {cold-start (Vctrl clamp 0.9 V), worst-case re-lock (2.7 V)} at f_out = 80 MHz, band 5, Icp code 2, lock-detector window trim code 8. Batch-manifest port of sim/lock-time/testbench/run.sh (#828): same operating point, windows (cold = N us, relock = N/2 us, i.e. 80 / 40 reference periods), print step and 100 ps internal-timestep ceiling.",
+  "claim": "spec/pll.md#lock-time -- closed-loop cold-start and worst-case re-lock acquisition against the design's own lock_detector, full 45-point PVT grid x N x condition (270 points).",
+  "methodology": [
+    "PORT, NOT A NEW MEASUREMENT. tb_lock_time_batch.sp is tb_lock_time.sp with the .control block replaced by manifest analyses and the .measure cards by raw_measures; the DUT instance, static configuration, clamp release, solver options and measurement expressions are unchanged. The per-(N, condition) values run.sh computes (reference frequency 80 MHz / N, window min(80 reference periods, 4 us * N/4) cold or 2 us * N/4 relock, t_force = 0.02 reference periods, divider codes from cloop_divider_params) are written out as the six points of the `np` axis.",
+    "VERDICT. A row is PASS when LOCK is high at the end of the window (lock_at_end >= 1.5 V) and a last LOCK rising edge exists; t_lock_last_rise is optional because its failure to land is the FAIL condition the legacy campaign reports, not a broken deck. The DN-branch integration guard floor is 8.9e-4 V (3e-4 * 2.97 V), the legacy 3e-4 * VDD at the lowest supply; at 3.30 V and 3.63 V the legacy floor is 9.9e-4 V and 1.09e-3 V.",
+    "WINDOW AND HOST. Every row's window is fixed by N and condition, never by SIM_WINCAP. Rows run on the batch fleet; the executing ngspice build is recorded per point."
+  ],
+  "dut": [
+    "design/netlist/pll_top.spice"
+  ],
+  "netlist": "tb_lock_time_batch.sp",
+  "nominal_supply_v": 3.3,
+  "supply_tolerance": 0.1,
+  "temperatures_c": [
+    -40,
+    27,
+    125
+  ],
+  "corners": [
+    "mos"
+  ],
+  "params": {
+    "iunit": "8u",
+    "b0_code": "1",
+    "b1_code": "0",
+    "b2_code": "1",
+    "cpb0_code": "0",
+    "cpb1_code": "1",
+    "ldt0_code": "0",
+    "ldt1_code": "0",
+    "ldt2_code": "0",
+    "ldt3_code": "1",
+    "tstep": "2.5e-10",
+    "tmax": "100e-12"
+  },
+  "options": [
+    "rshunt=1e12",
+    "itl4=200",
+    "reltol=1e-3",
+    "abstol=1e-9",
+    "vntol=1e-4",
+    "chgtol=1e-13"
+  ],
+  "analyses": [
+    "save v(vctrl) v(lock) v(xdut.up) v(xdut.dn) v(xdut.vwin)",
+    "tran {tstep} {tstop} 0 {tmax}"
+  ],
+  "raw_measures": {
+    "t_lock_last_rise": {
+      "analysis": "tran",
+      "expr": "when v(lock)='vdd_val/2' rise=last",
+      "optional": true
+    },
+    "lock_at_end": {
+      "analysis": "tran",
+      "expr": "find v(lock) at='tstop-1p'"
+    },
+    "vctrl_final": {
+      "analysis": "tran",
+      "expr": "find v(vctrl) at='tstop-1p'"
+    },
+    "dn_lvl": {
+      "analysis": "tran",
+      "expr": "avg v(xdut.dn) from='0.9*tstop' to='tstop-1p'"
+    }
+  },
+  "topology_groups": {
+    "lock": {
+      "description": "closed-loop lock acquisition",
+      "measures": [
+        "t_lock_last_rise",
+        "lock_at_end",
+        "vctrl_final"
+      ]
+    },
+    "integration": {
+      "description": "PFD DN-branch integration guard",
+      "measures": [
+        "dn_lvl"
+      ]
+    }
+  },
+  "checks": {
+    "lock_at_end": {
+      "min": 1.5
+    },
+    "dn_lvl": {
+      "min": 0.00089
+    }
+  },
+  "sweeps": {
+    "np": {
+      "description": "N x start condition, with the per-point reference frequency, window and divider codes run.sh derived",
+      "points": {
+        "n4cold": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "1",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "20000000",
+            "nratio": "4",
+            "vctrl_ic": "0.9",
+            "tstop": "4e-06",
+            "t_force": "1e-09"
+          }
+        },
+        "n4relock": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "1",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "20000000",
+            "nratio": "4",
+            "vctrl_ic": "2.7",
+            "tstop": "2e-06",
+            "t_force": "1e-09"
+          }
+        },
+        "n16cold": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "1",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "5000000",
+            "nratio": "16",
+            "vctrl_ic": "0.9",
+            "tstop": "1.6e-05",
+            "t_force": "4e-09"
+          }
+        },
+        "n16relock": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "1",
+            "sel4_code": "0",
+            "sel5_code": "0",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "5000000",
+            "nratio": "16",
+            "vctrl_ic": "2.7",
+            "tstop": "8e-06",
+            "t_force": "4e-09"
+          }
+        },
+        "n64cold": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "1",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "1250000",
+            "nratio": "64",
+            "vctrl_ic": "0.9",
+            "tstop": "6.4e-05",
+            "t_force": "1.6e-08"
+          }
+        },
+        "n64relock": {
+          "params": {
+            "sel0_code": "0",
+            "sel1_code": "0",
+            "sel2_code": "0",
+            "sel3_code": "0",
+            "sel4_code": "0",
+            "sel5_code": "1",
+            "p0_code": "0",
+            "p1_code": "0",
+            "p2_code": "0",
+            "p3_code": "0",
+            "p4_code": "0",
+            "p5_code": "0",
+            "fref": "1250000",
+            "nratio": "64",
+            "vctrl_ic": "2.7",
+            "tstop": "3.2e-05",
+            "t_force": "1.6e-08"
+          }
+        }
+      }
+    }
+  }
+}
