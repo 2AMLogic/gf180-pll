@@ -3114,7 +3114,7 @@ class TestRelativeToAnotherMeasurement(_TreeTest):
 
 
 class TestARangeIsNotAFigure(_TreeTest):
-    """Both grading tables refuse a two-ended range.
+    """All three grading tables refuse a two-ended range.
 
     `parse_quoted` reads the number at the front of the string, so a quoted
     `0.1-0.5 dB` would be graded as `0.1` and the other end would never be
