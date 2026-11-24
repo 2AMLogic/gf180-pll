@@ -516,7 +516,7 @@ and the PDK's own `antenna.drc` (run on each GDS, committed in each dated
 dir, zero violations) clears. Calling the pinned item-11 grader
 (`_resolve_erc_supply_spec`) on the new envelopes resolves the ERC half
 of `vco_block`, `divider_chain` and `lock_detector` (reason `None`, no
-supply finding); `pll_top` and `pfd_cp` render
+supply finding); ~~`pll_top` and `pfd_cp` render
 `supply_spec_disclosed_tool_limitation` — quoted verbatim in each dated
 `RECORD.md`, with removal owned by
 [#1085](https://github.com/2AMLogic/gf180-pll/issues/1085) (a well-class
@@ -525,7 +525,19 @@ marker layer, or upstream
 So "no passing ERC half for the grader to read" is no longer the
 blocker for three cells; what remains is the pairing/citation decision
 (#149 / #987 own the LVS half), and the two disclosures, which are
-deliberately not relaxed. The five committed `erc-report.json` files are
+deliberately not relaxed.~~ — **corrected (2026-11-24, issue #1113):**
+klt 0.9.2 added the well-side box selectors
+(`well_requires_boxes` / `well_excludes_boxes`) that #1085 (closed by
+#1095) used to replace each cell's disclosure with a declared `ties[]`
+partition, recorded with its own envelope and spec copy in each dated
+`erc-ties-20261121/` directory; on those envelopes the pinned grader
+resolves the spec (`pll_top`: 5 supply nets, `tie_count: 5`; `pfd_cp`:
+2 / 2) and each `RECORD.md` quotes the reason verbatim as
+`supply_not_continuous` — an `erc.missing_tie` on the `PSRC` dump-buffer
+tub, whose real tap no in-stream label names for `klt erc` to credit.
+Both cells are item-11 `unmet` by measurement now, not by disclosure;
+what remains is the pairing/citation decision (#149 / #987 own the LVS
+half). The five committed `erc-report.json` files are
 byte-unchanged; the dated directories are the record.
 
 - **A spec declaring no `ties[]` now renders `supply_spec_incomplete`.** The
@@ -586,11 +598,16 @@ rather than re-derives them:
   supply-continuity finding is clean, but the block's dual-biased well cannot
   be expressed as a single `ties[]` takeoff, so the spec discloses the
   omission (`ties_disclosure`, `kind: "tool_limitation"`) rather than
-  declaring or silently omitting it. The grader renders
+  declaring or silently omitting it. ~~The grader renders
   `supply_spec_disclosed_tool_limitation` — an honest disclosure, still
   `unmet`. The underlying gap in `ties[]`'s well-side selector is filed
   upstream (klayout-tools#2540, klayout-tools#2541), not tracked in this
-  repository.
+  repository.~~ — **corrected (2026-11-24, issue #1113):** klt 0.9.2's
+  well-side box selectors express the split, and #1085 (closed by #1095)
+  declared it in a dated `erc-ties-20261121/` spec copy; on that
+  envelope the grader's reason is the measured `supply_not_continuous`
+  (an `erc.missing_tie` on the `PSRC` tub), so the block is `unmet` by
+  measurement, not by disclosure.
 - **`divider_chain`** and **`lock_detector`** (their own `PROOF-erc.md`
   files): both declare and check a real `ties[]` entry with zero
   `erc.missing_tie` findings, and both declared supplies resolve to exactly
@@ -631,10 +648,14 @@ either. The per-cell picture: `divider_chain` still has the clean ERC half
 but no LVS envelope; `vco_block`'s ERC half carries the
 `supply_not_continuous` finding named above and its LVS `match` is
 topology-only (its `RECORD.md` states no device value was compared);
-`pfd_cp`'s ERC half renders `supply_spec_disclosed_tool_limitation` (its
+~~`pfd_cp`'s ERC half renders `supply_spec_disclosed_tool_limitation` (its
 `PROOF-erc.md` names the unexpressible dual-biased well), so it stays
-uncitable even once the antenna half is satisfied; `pll_top` has
-block-scoped ERC and DRC envelopes and no LVS envelope at all.
+uncitable even once the antenna half is satisfied;~~ — **corrected
+(2026-11-24, issue #1113):** `pfd_cp`'s ERC half is graded on a declared
+`ties[]` partition since #1085 (closed by #1095) and carries the
+measured `supply_not_continuous` (its `erc-ties-20261121/RECORD.md`);
+`pll_top` has block-scoped ERC and DRC envelopes and no LVS envelope
+at all.
 
 ~~Net: item 11 is `unmet` for every block, for reasons that are now precisely
 named per block rather than uniform, and none of them is a known
@@ -656,9 +677,16 @@ clears every one of them; the corroboration runs are committed beside
 the envelopes). Item 11 remains `unmet` for every partition row — the
 manifest still cites nothing — and the honest blockers are now: the
 pairing/citation decision for the three resolved cells (#149 / #987 own
-the LVS half), and the `supply_spec_disclosed_tool_limitation`
+the LVS half), ~~and the `supply_spec_disclosed_tool_limitation`
 disclosures on `pll_top` and `pfd_cp` (#1085 owns their removal; they
-are deliberately not relaxed to manufacture a pass).
+are deliberately not relaxed to manufacture a pass).~~ — **corrected
+(2026-11-24, issue #1113):** and, for `pll_top` and `pfd_cp`, the
+measured `supply_not_continuous` reason each
+`erc-ties-20261121/RECORD.md` quotes: #1085 (closed by #1095) declared
+their `ties[]` partitions on the klt 0.9.2 box selectors, and the
+finding the declaration computes — the `PSRC` dump-buffer tub's tap,
+which no in-stream label credits — blocks item 11 by measurement, not
+by disclosure.
 
 ### Superseded: why the checklist was vendored here
 
